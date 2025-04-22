@@ -4,3 +4,4 @@ deep-translator
 streamlit-js-eval
 folium
 pandas
+streamlit-folium
