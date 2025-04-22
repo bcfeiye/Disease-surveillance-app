@@ -45,7 +45,7 @@ def detect_symptoms(text, location):
 
     return detected if detected["symptoms"] else None
 
-# Reverse geocoding to get address
+# Reverse geocoding to get detailed location info
 def get_location_details(lat, lon):
     try:
         url = f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json"
@@ -68,40 +68,36 @@ def get_location_details(lat, lon):
     return "Unknown"
 
 # Streamlit UI
-st.title("Disease Surveillance Web App with GPS, Translation, and Map")
+st.title("Disease Surveillance Web App with GPS, Translation & Live Map")
 
-st.markdown("This app scans your message in any language, detects symptoms, and shows reports on a live map.")
-st.markdown("**Note:** Allow browser location access. If blocked, go to site settings and change location to 'Allow'.")
+st.markdown("This app scans your message in any language, detects symptoms, and shows them on a live map.")
+st.markdown("**Note:** Allow your browser to access your location. If blocked, change it in your browser's site settings.")
 
-# Load or create session-level symptom report log
 if "reports" not in st.session_state:
     st.session_state.reports = []
 
-# Try to get GPS location from browser
 location_data = streamlit_js_eval(
     js_expressions="navigator.geolocation.getCurrentPosition((pos) => ({latitude: pos.coords.latitude, longitude: pos.coords.longitude}))",
     key="get_user_location", want_return=True
 )
 
-# User input
 user_input = st.text_area("Type your post (in any language):")
 
 if st.button("Scan and Report"):
     if not user_input.strip():
         st.warning("Please enter a message.")
     else:
+        lat, lon = 0, 0
         if location_data and "latitude" in location_data and "longitude" in location_data:
             lat = location_data["latitude"]
             lon = location_data["longitude"]
             location_string = get_location_details(lat, lon)
-            st.write(f"GPS Coordinates: Latitude: {lat}, Longitude: {lon}")
+            st.write(f"GPS Coordinates: {lat}, {lon}")
             st.write(f"Detected Location: {location_string}")
         else:
             location_string = "Unknown"
-            lat, lon = 0, 0
-            st.warning("Could not fetch your GPS location.")
+            st.warning("Could not fetch your exact GPS location. Your report will still be stored.")
 
-        # Translate and analyze
         try:
             translated_text = GoogleTranslator(source='auto', target='en').translate(user_input)
             st.write("Translated Text:", translated_text)
@@ -109,7 +105,6 @@ if st.button("Scan and Report"):
             translated_text = user_input
             st.warning("Translation failed. Using original.")
 
-        # Detect symptoms
         result = detect_symptoms(translated_text, location_string)
         if result:
             result["lat"] = lat
@@ -120,13 +115,21 @@ if st.button("Scan and Report"):
         else:
             st.info("No symptoms detected.")
 
-# Show map with reports
+# Map Section
+st.subheader("Live Outbreak Map")
+default_center = [25.276987, 55.296249]  # Default: Dubai
+last_valid = next((r for r in reversed(st.session_state.reports) if r["lat"] != 0), None)
+center = [last_valid["lat"], last_valid["lon"]] if last_valid else default_center
+
+m = folium.Map(location=center, zoom_start=5)
+for report in st.session_state.reports:
+    if report["lat"] != 0:
+        popup_info = f"{report['location']}<br>{', '.join(report['symptoms'])}<br>{report['timestamp']}"
+        folium.Marker([report["lat"], report["lon"]], popup=popup_info, icon=folium.Icon(color='red')).add_to(m)
+st_folium(m, width=700, height=500)
+
+# Outbreak Report Table
 if st.session_state.reports:
-    st.subheader("Live Outbreak Map")
-    map_center = [st.session_state.reports[-1]["lat"], st.session_state.reports[-1]["lon"]] if st.session_state.reports[-1]["lat"] != 0 else [25.276987, 55.296249]
-    m = folium.Map(location=map_center, zoom_start=5)
-    for report in st.session_state.reports:
-        if report["lat"] != 0:
-            popup_info = f"{report['location']}<br>{', '.join(report['symptoms'])}<br>{report['timestamp']}"
-            folium.Marker([report["lat"], report["lon"]], popup=popup_info, icon=folium.Icon(color='red')).add_to(m)
-    st_data = st_folium(m, width=700, height=500)
+    st.subheader("Summary of Reported Outbreaks")
+    df = pd.DataFrame(st.session_state.reports)
+    st.dataframe(df[["timestamp", "location", "symptoms"]])
