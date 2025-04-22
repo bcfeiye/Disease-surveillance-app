@@ -1,4 +1,3 @@
-
 import streamlit as st
 import re
 import json
@@ -6,9 +5,6 @@ from datetime import datetime
 from deep_translator import GoogleTranslator
 from streamlit_js_eval import streamlit_js_eval
 import requests
-import pandas as pd
-import folium
-from streamlit_folium import st_folium
 
 # Keywords and phrases
 keywords = [
@@ -45,7 +41,7 @@ def detect_symptoms(text, location):
 
     return detected if detected["symptoms"] else None
 
-# Reverse geocoding to get detailed location info
+# Reverse geocoding for better location data
 def get_location_details(lat, lon):
     try:
         url = f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json"
@@ -68,10 +64,10 @@ def get_location_details(lat, lon):
     return "Unknown"
 
 # Streamlit UI
-st.title("Disease Surveillance Web App with GPS, Translation & Live Map")
+st.title("Disease Surveillance Web App with Translation & Live Location")
 
-st.markdown("This app scans your message in any language, detects symptoms, and shows them on a live map.")
-st.markdown("**Note:** Allow your browser to access your location. If blocked, change it in your browser's site settings.")
+st.markdown("This app scans your message in any language, detects possible illness symptoms, and fetches your live location.")
+st.markdown("**Note:** Allow your browser to access your location. If blocked, go to your browser's site settings and change location to 'Allow'.")
 
 if "reports" not in st.session_state:
     st.session_state.reports = []
@@ -83,7 +79,7 @@ location_data = streamlit_js_eval(
 
 user_input = st.text_area("Type your post (in any language):")
 
-if st.button("Scan and Report"):
+if st.button("Scan"):
     if not user_input.strip():
         st.warning("Please enter a message.")
     else:
@@ -92,11 +88,11 @@ if st.button("Scan and Report"):
             lat = location_data["latitude"]
             lon = location_data["longitude"]
             location_string = get_location_details(lat, lon)
-            st.write(f"GPS Coordinates: {lat}, {lon}")
+            st.write(f"Live GPS Coordinates: {lat}, {lon}")
             st.write(f"Detected Location: {location_string}")
         else:
             location_string = "Unknown"
-            st.warning("Could not fetch your exact GPS location. Your report will still be stored.")
+            st.warning("Could not fetch your GPS location.")
 
         try:
             translated_text = GoogleTranslator(source='auto', target='en').translate(user_input)
@@ -107,29 +103,13 @@ if st.button("Scan and Report"):
 
         result = detect_symptoms(translated_text, location_string)
         if result:
-            result["lat"] = lat
-            result["lon"] = lon
-            st.session_state.reports.append(result)
-            st.success("Symptoms detected and report added.")
+            st.success("Symptoms detected!")
             st.json(result)
+            st.session_state.reports.append(result)
         else:
             st.info("No symptoms detected.")
 
-# Map Section
-st.subheader("Live Outbreak Map")
-default_center = [25.276987, 55.296249]  # Default: Dubai
-last_valid = next((r for r in reversed(st.session_state.reports) if r["lat"] != 0), None)
-center = [last_valid["lat"], last_valid["lon"]] if last_valid else default_center
-
-m = folium.Map(location=center, zoom_start=5)
-for report in st.session_state.reports:
-    if report["lat"] != 0:
-        popup_info = f"{report['location']}<br>{', '.join(report['symptoms'])}<br>{report['timestamp']}"
-        folium.Marker([report["lat"], report["lon"]], popup=popup_info, icon=folium.Icon(color='red')).add_to(m)
-st_folium(m, width=700, height=500)
-
-# Outbreak Report Table
+# Summary table
 if st.session_state.reports:
-    st.subheader("Summary of Reported Outbreaks")
-    df = pd.DataFrame(st.session_state.reports)
-    st.dataframe(df[["timestamp", "location", "symptoms"]])
+    st.subheader("Summary of Your Reports")
+    st.json(st.session_state.reports)
