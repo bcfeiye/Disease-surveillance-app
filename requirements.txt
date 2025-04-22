@@ -2,3 +2,5 @@ streamlit
 geocoder
 deep-translator
 streamlit-js-eval
+folium
+pandas
