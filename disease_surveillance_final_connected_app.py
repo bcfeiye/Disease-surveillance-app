@@ -1,4 +1,3 @@
-
 import streamlit as st
 import re
 import json
@@ -6,6 +5,10 @@ from datetime import datetime
 from deep_translator import GoogleTranslator
 import pandas as pd
 from collections import Counter
+import folium
+from streamlit_folium import st_folium
+from geopy.geocoders import Nominatim
+from geopy.exc import GeocoderTimedOut
 
 # ---------- SYMPTOM DETECTION SETUP ----------
 keywords = [
@@ -40,6 +43,18 @@ def detect_symptoms(text, location):
             detected["symptoms"].append(phrase)
 
     return detected if detected["symptoms"] else None
+
+# Geocode locations
+geolocator = Nominatim(user_agent="disease-surveillance-app")
+
+def geocode_location(location_name):
+    try:
+        location = geolocator.geocode(location_name, timeout=10)
+        if location:
+            return (location.latitude, location.longitude)
+    except GeocoderTimedOut:
+        return None
+    return None
 
 # ---------- STREAMLIT UI ----------
 st.set_page_config(page_title="Disease Surveillance System", layout="wide")
@@ -111,3 +126,16 @@ with tab2:
             st.subheader("Reports by Location")
             location_counts = df["location"].value_counts()
             st.bar_chart(location_counts)
+
+            # Generate map
+            st.subheader("Report Locations on Map")
+            map_center = (25.276987, 55.296249)  # Dubai center as default
+            m = folium.Map(location=map_center, zoom_start=4)
+
+            for loc in location_counts.index:
+                coords = geocode_location(loc)
+                if coords:
+                    popup_info = f"{loc}: {location_counts[loc]} report(s)"
+                    folium.Marker(location=coords, popup=popup_info, icon=folium.Icon(color="red")).add_to(m)
+
+            st_folium(m, width=700, height=500)
