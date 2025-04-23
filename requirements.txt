@@ -1,2 +1,6 @@
 streamlit
 deep-translator
+pandas
+folium
+streamlit-folium
+geopy
