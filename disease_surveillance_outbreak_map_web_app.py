@@ -1,3 +1,4 @@
+
 import streamlit as st
 import re
 import json
@@ -67,6 +68,8 @@ if st.button("Scan"):
         if result:
             st.success("Symptoms detected!")
             st.json(result)
+
+            # Store the result in session_state
             st.session_state.reports.append(result)
         else:
             st.info("No symptoms detected.")
