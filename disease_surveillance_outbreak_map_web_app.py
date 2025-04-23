@@ -3,8 +3,6 @@ import re
 import json
 from datetime import datetime
 from deep_translator import GoogleTranslator
-from streamlit_js_eval import streamlit_js_eval
-import requests
 
 # Keywords and phrases
 keywords = [
@@ -41,59 +39,23 @@ def detect_symptoms(text, location):
 
     return detected if detected["symptoms"] else None
 
-# Reverse geocoding for better location data
-def get_location_details(lat, lon):
-    try:
-        url = f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json"
-        response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"})
-        if response.status_code == 200:
-            data = response.json()
-            address = data.get("address", {})
-            return ", ".join(filter(None, [
-                address.get("road"),
-                address.get("neighbourhood"),
-                address.get("suburb"),
-                address.get("city"),
-                address.get("town"),
-                address.get("village"),
-                address.get("state"),
-                address.get("country")
-            ]))
-    except:
-        return "Unknown"
-    return "Unknown"
-
 # Streamlit UI
-st.title("Disease Surveillance Web App with Translation & Live Location")
+st.title("Disease Surveillance Web App with Manual Location Entry")
 
-st.markdown("This app scans your message in any language, detects possible illness symptoms, and fetches your live location.")
-st.markdown("**Note:** Allow your browser to access your location. If blocked, go to your browser's site settings and change location to 'Allow'.")
+st.markdown("This app scans your message in any language, detects illness symptoms, and lets you enter your location manually.")
 
 if "reports" not in st.session_state:
     st.session_state.reports = []
 
-location_data = streamlit_js_eval(
-    js_expressions="navigator.geolocation.getCurrentPosition((pos) => ({latitude: pos.coords.latitude, longitude: pos.coords.longitude}))",
-    key="get_user_location", want_return=True
-)
-
 user_input = st.text_area("Type your post (in any language):")
+user_location = st.text_input("Enter your location (city, area, or country):")
 
 if st.button("Scan"):
     if not user_input.strip():
         st.warning("Please enter a message.")
+    elif not user_location.strip():
+        st.warning("Please enter your location.")
     else:
-        lat, lon = 0, 0
-        if location_data and "latitude" in location_data and "longitude" in location_data:
-            lat = location_data["latitude"]
-            lon = location_data["longitude"]
-            location_string = get_location_details(lat, lon)
-            st.write(f"Live GPS Coordinates: {lat}, {lon}")
-            st.write(f"Detected Location: {location_string}")
-        else:
-            location_string = "Unknown"
-            st.warning("Could not fetch your GPS location.")
-
         try:
             translated_text = GoogleTranslator(source='auto', target='en').translate(user_input)
             st.write("Translated Text:", translated_text)
@@ -101,7 +63,7 @@ if st.button("Scan"):
             translated_text = user_input
             st.warning("Translation failed. Using original.")
 
-        result = detect_symptoms(translated_text, location_string)
+        result = detect_symptoms(translated_text, user_location)
         if result:
             st.success("Symptoms detected!")
             st.json(result)
